@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- Welcome. If you're reading this, then say hello desertcloak@pm.me , then, consider improving it, and send me the improvements. *lazy* 
+Last updated at 26 August 2024, and used on the FishPaste server in ZA
+-->
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DayZ Loot Spawn Editor</title>
+    <style>
+        body {
+            background-color: #2f2f2f;
+            color: #d0d0d0;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden; /* Prevent horizontal overflow */
+        }
+        .container {
+            width: 100%;
+            height: 100vh;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #3f3f3f;
+            border-radius: 0;
+            box-sizing: border-box;
+            overflow-y: auto; /* Allow vertical scroll if needed */
+        }
+        h1 {
+            text-align: center;
+            color: #a8d08d;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            border: 1px solid #4a4a4a;
+            text-align: left;
+        }
+        th {
+            background-color: #4a4a4a;
+        }
+        tr:nth-child(even) {
+            background-color: #2a2a2a;
+        }
+        .edit-input {
+            width: 100%;
+            padding: 8px;
+            background-color: #3f3f3f;
+            color: #d0d0d0;
+            border: 1px solid #4a4a4a;
+            border-radius: 4px;
+        }
+        .button {
+            background-color: #a8d08d;
+            color: #2f2f2f;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            display: block;
+            width: 200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .button:hover {
+            background-color: #94b886;
+        }
+        .search-bar, .file-input {
+            width: calc(100% - 24px);
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #4a4a4a;
+            border-radius: 4px;
+            background-color: #3f3f3f;
+            color: #d0d0d0;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DayZ Loot Spawn Editor</h1>
+		<h2>Experimental, use at your own risk. BACKUP AND VALIDATE</h2>
+		<p>Upload your types.xml file, modify your needed values, and then download. Always make a backup of your original types.xml, before replacing it with the modified download.</p>
+		<p>After uploading/selecting your file, just give it a sec to load; there's no loading twirly yet.<br>
+		I created this to help with the server administration and tweaking, and to improve on some issues I encountered with other tools. Hover over each field to see what it means. When you are done, validate your XML at <a href='https://jsonformatter.org/xml-validator'>https://jsonformatter.org/xml-validator</a></p>
+        <input type="file" id="fileInput" class="file-input" accept=".xml" onchange="handleFileUpload(event)">
+        <input type="text" id="searchBar" class="search-bar" placeholder="Search items..." onkeyup="filterTable()" disabled>
+        <button class="button" id="downloadButton" onclick="downloadModifiedXML()" disabled>Download Modified File</button>
+
+        <table id="lootTable">
+            <thead>
+                <tr>
+                    <th>Type Name</th>
+                    <th>Nominal</th>
+                    <th>Lifetime</th>
+                    <th>Restock</th>
+                    <th>Min</th>
+                    <th>QuantMin</th>
+                    <th>QuantMax</th>
+                    <th>Cost</th>
+                    <!--<th>Flags (do not use yet)</th>--> <!-- Removing this for now, as it displays wrong, and can cause problems. Feel free to fix it -->
+                    <th>Category</th>
+                    <th>Usage</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <!-- the loaded dynamic stuff will go here. -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let xmlDoc; // store modified version in this var
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file && file.type.match('text/xml')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const xmlContent = e.target.result;
+                    parseXML(xmlContent);
+                    document.getElementById('searchBar').disabled = false; 			// search turned on after loaded
+                    document.getElementById('downloadButton').disabled = false; 	// download button after loaded
+                };
+                reader.readAsText(file);
+            } else {
+                alert('Your file seems to be invalid XML. Only upload a types.xml file from your DayZ server');
+            }
+        }
+
+        function parseXML(xmlContent) {
+            const parser = new DOMParser();
+            xmlDoc = parser.parseFromString(xmlContent, "application/xml");
+            const types = xmlDoc.getElementsByTagName("type");
+            const tableBody = document.getElementById("tableBody");
+            tableBody.innerHTML = ''; 
+
+            for (let type of types) {
+                const row = document.createElement("tr");
+
+                // Type Name (non-editable)
+                const typeName = document.createElement("td");
+                typeName.textContent = type.getAttribute("name");
+                row.appendChild(typeName);
+
+                // Nominal (editable)
+                const nominal = createEditableCell(type, "nominal", "Maximum number present on server");
+                row.appendChild(nominal);
+
+                // Lifetime (editable)
+                const lifetime = createEditableCell(type, "lifetime", "Time to Despawn, in seconds");
+                row.appendChild(lifetime);
+
+                // Restock (editable)
+                const restock = createEditableCell(type, "restock", "Time to respawn, if picked up, ruined, or despawned (in seconds)");
+                row.appendChild(restock);
+
+                // Min (editable)
+                const min = createEditableCell(type, "min", "The minimum amount to be present on server.");
+                row.appendChild(min);
+
+                // QuantMin (editable)
+                const quantmin = createEditableCell(type, "quantmin", "Quantity limits inside containers, like water in a bottle. Minimum and Maximum");
+                row.appendChild(quantmin);
+
+                // QuantMax (editable)
+                const quantmax = createEditableCell(type, "quantmax", "Quantity limits inside containers, like water in a bottle. Minimum and Maximum");
+                row.appendChild(quantmax);
+
+                // Cost (editable)
+                const cost = createEditableCell(type, "cost", "Used as a priority for the spawning system, in %");
+                row.appendChild(cost);
+
+                // Flags (non-editable)
+                <!-- const flags = document.createElement("td"); -->
+                <!-- const flagsInput = document.createElement("input"); -->
+                <!-- flagsInput.type = "text"; -->
+                <!-- flagsInput.value = Object.entries(type.getElementsByTagName("flags")[0].attributes).map(([name, attr]) => `${name}=${attr.value}`).join(", "); -->
+                <!-- flagsInput.className = "edit-input"; -->
+                <!-- flagsInput.title = "Whether items in these locations are counted towards the 'nominal' value"; -->
+                <!-- flags.appendChild(flagsInput); -->
+                <!-- row.appendChild(flags); -->
+
+                // Category (non-editable)
+                const category = document.createElement("td");
+                category.textContent = type.getElementsByTagName("category")[0]?.getAttribute("name") || "";
+                category.title = "Ignoring this, because it is best that way";
+                row.appendChild(category);
+
+                // Usage (non-editable)
+                const usage = document.createElement("td");
+                usage.textContent = Array.from(type.getElementsByTagName("usage")).map(u => u.getAttribute("name")).join(", ");
+                usage.title = "Ignoring this, to keep it real";
+                row.appendChild(usage);
+
+                tableBody.appendChild(row);
+            }
+        }
+
+		// Editable row cells/
+        function createEditableCell(type, fieldName, tooltip) {
+            const cell = document.createElement("td");
+            const input = document.createElement("input");
+            input.type = "text";
+            input.value = type.getElementsByTagName(fieldName)[0]?.textContent || "";
+            input.className = "edit-input";
+            input.title = tooltip;
+            input.onchange = (event) => updateXMLValue(type, fieldName, event.target.value);
+            cell.appendChild(input);
+            return cell;
+        }
+
+		// store changed value, to be a part of the dfownload later
+        function updateXMLValue(typeElement, fieldName, newValue) {
+            const element = typeElement.getElementsByTagName(fieldName)[0];
+            if (element) {
+                element.textContent = newValue;
+            }
+        }
+
+		// search filter for the rows
+        function filterTable() {
+            const searchValue = document.getElementById('searchBar').value.toLowerCase();
+            const rows = document.querySelectorAll('#lootTable tbody tr');
+            rows.forEach(row => {
+                const typeName = row.cells[0].textContent.toLowerCase();
+                row.style.display = typeName.includes(searchValue) ? '' : 'none';
+            });
+        }
+
+        function downloadModifiedXML() {
+            const serializer = new XMLSerializer();
+            const modifiedXML = serializer.serializeToString(xmlDoc);
+            const blob = new Blob([modifiedXML], { type: "text/xml" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "modified_types.xml";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DayZ::CfgGamePlay Editor</title>
+    <style>
+        body {
+            font-family: Lato, tahoma, Arial, sans-serif;
+            background-color: #14281D;
+            color: #FFFFFF;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #355834;
+            border-radius: 8px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+            color: #FFFFFF;
+        }
+
+        .header p {
+            margin: 8px 0;
+            color: #a6acb3;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .controls input[type="file"] {
+            display: none;
+        }
+
+        .controls label {
+            font-weight: normal;
+            font-family: lato, tahoma, arial;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 10px 20px;
+            background-color: #30444a;
+            border-radius: 5px;
+            color: #bedce6;
+        }
+
+        .controls input[type="text"], .controls button {
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+        }
+
+        .controls input[type="text"] {
+            width: 50%;
+            background-color: #65707d;
+            color: #c6c9cc;
+        }
+
+        .controls button {
+            font-weight: normal;
+            font-family: lato, tahoma, arial;
+            font-size: 16px;
+            background-color: #30444a;
+            cursor: pointer;
+            color: #bedce6;
+        }
+
+        .json-editor {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background-color: #14281D;
+            padding: 20px;
+            border-radius: 8px;
+            max-height: calc(100vh - 220px);
+            overflow-y: auto;
+        }
+
+        .json-editor .key-value-pair {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background-color: #355834;
+            border-radius: 5px;
+        }
+
+        .json-editor .key {
+            font-weight: normal;
+            font-family: lato, tahoma, arial;
+            color: #7ea874;
+            cursor: help;
+            flex: 1;
+            position: relative;
+        }
+
+        .json-editor .value {
+            font-weight: normal;
+            font-family: lato, verdana, arial;
+            flex: 2;
+            background-color: #2c4f42;
+            color: #b0bfac;
+            border: 1px solid #000000;
+            border-radius: 3px;
+        }
+
+        .editable {
+            cursor: text;
+        }
+
+        .tooltip {
+			font-family: lato, arial, verdana;
+			font-size: 15px;
+			font-weight: normal;
+            visibility: hidden;
+            width: 450px;
+            background-color: #1c2a36;
+            color: white;
+            text-align: left;
+            border-radius: 2px solid white;
+            padding: 5px;
+            position: fixed; /* Fixed positioning for tooltips */
+            z-index: 99;
+            top: 400px; /* Adjust top position as needed */
+            left: 30px; /* Adjust right position as needed */
+            opacity: 0.1;
+            transition: opacity 0.2s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>DayZ CfgGameplay.Json Editor</h1>
+            <p>Warning: Use at your own risk, especially if you don't make backups or validate the file.<br>
+            Upload your cfggameplay.json file, modify as you please, then press Download to get the modified file. <br>
+            After backing up your original server configs, replace your cfggameplay.json with the new one, and restart your server.<br>
+            Default values are based on the findings in cfggameplay, and shown in the tooltips.</p>
+        </div>
+
+        <div class="controls">
+            <label for="file-input">Upload Original</label>
+            <input type="file" id="file-input" accept=".json">
+            <input type="text" id="search" placeholder="Search...">
+            <button id="download-btn">Download Modified</button>
+        </div>
+
+        <div id="json-editor" class="json-editor"></div>
+    </div>
+
+    <script>
+        const ignoredKeys = ["version"]; // some keys are best left unchanged, or else. Version is such a key.
+        const tooltips = {
+			"version": "Version of this file. Leave it alone",
+			"GeneralData.disableBaseDamage": "Toggle damage to structures created by base building. - false",
+			"GeneralData.disableContainerDamage": "Toggle damage to containers like tents & barrels. - false",
+			"GeneralData.disableRespawnDialog": "Toggle the window where player selects the type of respawn after pressing the respawn button. - false",
+			"GeneralData.disableRespawnInUnconsciousness": "Whether a player is allow to respawn (in the pause menu) while unconscious. - false",
+			"PlayerData.disablePersonalLight": "Turn the personal glow around players (at night) on or off. - false.",
+			"PlayerData.StaminaData.sprintStaminaModifierErc": "Stamina consumption multiplier - during erected sprint. - 1.0",
+			"PlayerData.StaminaData.sprintStaminaModifierCro": "Stamina consumption multiplier - during crouched sprint. - 1.0",
+			"PlayerData.StaminaData.staminaWeightLimitThreshold": "This amount of stamina (divided by 1000) will not count towards stamina weight deduction. - 6000.0",
+			"PlayerData.StaminaData.staminaMax": "Stamina upper limit. Do not use 0.  - 100.0",
+			"PlayerData.StaminaData.staminaKgToStaminaPercentPenalty": "Percentage removed from Stamina Max, based on player's load. - 1.75",
+			"PlayerData.StaminaData.staminaMinCap": "Stamina lower limit. Do not use 0. - 5.0",
+			"PlayerData.StaminaData.sprintSwimmingStaminaModifier": "Stamina depletion multiplier, during fast swimming. - 1.0",
+			"PlayerData.StaminaData.sprintLadderStaminaModifier": "Stamina depletion multiplier, during fast ladder climbing. - 1.0",
+			"PlayerData.StaminaData.meleeStaminaModifier": "Stamina depletion multiplier, during heavy melee attacks or evasions. - 1.0",
+			"PlayerData.StaminaData.obstacleTraversalStaminaModifier": "Stamina depletion multiplier, during jumping, crawling or vaulting. - 1.0",
+			"PlayerData.StaminaData.holdBreathStaminaModifier": "Stamina depletion multiplier, while holding breath. - 1.0",
+			"PlayerData.ShockHandlingData.shockRefillSpeedConscious": "Shock recovery , while player is CONSCIOUS. - 5.0",
+			"PlayerData.ShockHandlingData.shockRefillSpeedUnconscious": "Shock recovery, while player is UNCONSCIOUS. - 1.0",
+			"PlayerData.ShockHandlingData.allowRefillSpeedModifier": "Allow shock modifiers, based on attack ammo. Typically, waking up faster from a gunshot. - true",
+			
+			"PlayerData.MovementData.timeToStrafeJog": "Time to blend strafe(diagonal) while jogging. - 0.1",
+			"PlayerData.MovementData.rotationSpeedJog": "Player's rotation speed, while jogging. - 0.15",
+			"PlayerData.MovementData.timeToSprint": "Time it takes player to accelerate from jog to spring. - 0.45",
+			"PlayerData.MovementData.timeToStrafeSprint": "Time to blend strafe(diagonal) while sprinting - 0.3",
+			"PlayerData.MovementData.rotationSpeedSprint": "Player's rotation speed, while sprinting. - 0.15",
+			"PlayerData.MovementData.allowStaminaAffectInertia": "Allow the player's stamina to affect his inertia - true",
+
+			"PlayerData.DrowningData.staminaDepletionSpeed": "Stamina depletion rate, while the player is drowning - 10.0",
+			"PlayerData.DrowningData.healthDepletionSpeed": "Health depletion rate, while the player is drowning - 10.0",
+			"PlayerData.DrowningData.shockDepletionSpeed": "Shock rate, while the player is drowning - 10.0",
+
+			"WorldsData.lightingConfig": "Lighting system for the world. 0 is brighter, 1 is darker. - 1",
+			"WorldsData.objectSpawnersArr": "Array of json filenames, containing the spawner data.",
+			"WorldsData.environmentMinTemps": "The minimum temperatures for each month. 12 Values exactly. Default: [-3, -2, 0, 4, 9, 14, 18, 17, 12, 7, 4, 0] ",
+			"WorldsData.environmentMaxTemps": "The maximum temperatures for each month. 12 Values exactly. Default: [3, 5, 7, 14, 19, 24, 26, 25, 21, 16, 10, 5] ",
+			"WorldsData.wetnessWeightModifiers": "Item weight modifiers for each wetness level (in order of DRY, DAMP, WET, SOAKED, DRENCHED). Default: [1.0, 1.0, 1.33, 1.66, 2.0]",
+			
+			"BaseBuildingData.HologramData.disableIsCollidingBBoxCheck": "Allows placement when the hologram is colliding with objects in the world ",
+			"BaseBuildingData.HologramData.disableIsCollidingPlayerCheck": "Allows placement when the hologram is colliding with player ",
+			"BaseBuildingData.HologramData.disableIsClippingRoofCheck": "Allows placement where placing would cause clipping with the roof ",
+			"BaseBuildingData.HologramData.disableIsBaseViableCheck": "Allows placement on dynamic objects and other otherwise incompatible base ",
+			"BaseBuildingData.HologramData.disableIsCollidingGPlotCheck": "Allows placement of garden plots despite incompatible surface type ",
+			"BaseBuildingData.HologramData.disableIsCollidingAngleCheck": "Allows placement despite exceeding roll/pitch/yaw limits ",
+			"BaseBuildingData.HologramData.disableIsPlacementPermittedCheck": "Allows placement event when not permitted by rudimentary checks ",
+			"BaseBuildingData.HologramData.disableHeightPlacementCheck": "Allows placement with limited height space ",
+			"BaseBuildingData.HologramData.disableIsUnderwaterCheck": "Allows placement under water ",
+			"BaseBuildingData.HologramData.disableIsInTerrainCheck": "Allows placement when clipping with terrain ",
+			"BaseBuildingData.HologramData.disallowedTypesInUnderground": "Prevents construction of these items types (including inherited ones) in the underground areas ",
+			
+			"BaseBuildingData.ConstructionData.disablePerformRoofCheck": "Allows construction when clipping with the roof ",
+			"BaseBuildingData.ConstructionData.disableIsCollidingCheck": "Allows construction when colliding with objects in the world ",
+			"BaseBuildingData.ConstructionData.disableDistanceCheck": "Prevents construction when player gets bellow specified range ",
+
+			"UIData.use3DMap": "Enable the 3D map only, while disabling the 2D map overlay",
+			"UIData.HitIndicationData.hitDirectionOverrideEnabled": "Whether values get used. Anything undefined here in 'HitIndicationData' (or any class in json file) is considered zero. Allows us to determine that some valid data had been loaded. - false",
+			"UIData.HitIndicationData.hitDirectionBehaviour": "Dictates general behaviour of the hit indicator. 0 == Disabled, 1 == Static, 2 == Dynamic - true",
+			"UIData.HitIndicationData.hitDirectionStyle": "Type of indicator used. Set of images/position calculations. 0 == 'splash', 1 == 'spike', 2 == 'arrow' - 0",
+			"UIData.HitIndicationData.hitDirectionIndicatorColorStr": "Color of the indicator widget, in ARGB and in quotes \"\"",
+			"UIData.HitIndicationData.hitDirectionMaxDuration": "Maximal duration of the hit indicator. Actual duration is between 0.6..1.0 of the defined value, depending on the severity of the hit (heavier hits == longer)  - 2.0",
+			"UIData.HitIndicationData.hitDirectionBreakPointRelative": "Fraction of the actual duration, after which the indicator begins to recede (currently fade-out only), 0.0 = fades from the beginning, 0.5 == fades after 50% duration has elapsed, 1.0 == no fading - 0.2",
+			"UIData.HitIndicationData.hitDirectionScatter": "Amount of scatter to induce inaccuracy to the indication. Actual scatter is randomized by amount of degrees in both directions (+- value, value of 10 gives potential scatter of 20 degrees) - 10.0",
+			"UIData.HitIndicationData.hitIndicationPostProcessEnabled": "Allows for disabling of the old hit effect (red flash) - true",
+
+			"MapData.ignoreMapOwnership": "Player can open a map (and just the map) using input (usually \"M\") even without map in inventory. - false",
+			"MapData.ignoreNavItemsOwnership": "Compass and/or GPS receiver are not needed for displaying helpers on the 2D map. - false",
+			"MapData.displayPlayerPosition": "Shows the red maker on the map, on player's position. It also display direction on the marker. - false",
+			"MapData.displayNavInfo": "Hide GPS and Compass UI from the map legend completely (even when player has those items in inventory). - true"
+        };
+
+        let jsonData = {};
+
+        document.getElementById('file-input').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    jsonData = JSON.parse(e.target.result);
+                    renderJSONEditor(jsonData);
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        document.getElementById('search').addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            document.querySelectorAll('.json-editor .key-value-pair').forEach(pair => {
+                const keyElement = pair.querySelector('.key');
+                if (keyElement.textContent.toLowerCase().includes(searchTerm)) {
+                    pair.style.display = 'flex';
+                } else {
+                    pair.style.display = 'none';
+                }
+            });
+        });
+
+        document.getElementById('download-btn').addEventListener('click', function() {
+            const jsonString = JSON.stringify(jsonData, null, 4);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'modified_cfggameplay.json';
+            link.click();
+        });
+
+        function renderJSONEditor(data, parentElement = document.getElementById('json-editor')) {
+            parentElement.innerHTML = ''; // wipe
+
+            function createEditableField(fullKey, key, value) {
+                const pairContainer = document.createElement('div');
+                pairContainer.className = 'key-value-pair';
+
+                const keyElement = document.createElement('div');
+                keyElement.className = 'key';
+                keyElement.textContent = key;
+
+                const tooltipText = tooltips[fullKey] || 'No tooltip available';
+                const tooltipElement = document.createElement('span');
+                tooltipElement.className = 'tooltip';
+                tooltipElement.textContent = tooltipText;
+                keyElement.appendChild(tooltipElement);
+
+                let valueElement;
+                if (typeof value === 'boolean') {
+                    valueElement = document.createElement('select');
+                    valueElement.className = 'value';
+                    const trueOption = document.createElement('option');
+                    trueOption.value = 'true';
+                    trueOption.textContent = 'true';
+                    const falseOption = document.createElement('option');
+                    falseOption.value = 'false';
+                    falseOption.textContent = 'false';
+                    valueElement.appendChild(trueOption);
+                    valueElement.appendChild(falseOption);
+                    valueElement.value = value.toString();
+                    valueElement.onchange = function() {
+                        setNestedValue(jsonData, fullKey, valueElement.value === 'true');
+                    };
+                } else {
+                    valueElement = document.createElement('input');
+                    valueElement.type = 'text';
+                    valueElement.className = 'value editable';
+                    valueElement.value = typeof value === 'string' ? value : JSON.stringify(value);
+                    valueElement.oninput = function() {
+                        setNestedValue(jsonData, fullKey, parseValue(valueElement.value));
+                    };
+                }
+
+                if (ignoredKeys.includes(key)) {
+                    valueElement.disabled = true;
+                }
+
+                pairContainer.appendChild(keyElement);
+                pairContainer.appendChild(valueElement);
+                parentElement.appendChild(pairContainer);
+            }
+
+            function parseValue(value) {
+                try {
+                    return JSON.parse(value);
+                } catch {
+                    return value;
+                }
+            }
+
+            function setNestedValue(obj, path, value) {
+                const keys = path.split('.');
+                let current = obj;
+
+                for (let i = 0; i < keys.length - 1; i++) {
+                    const key = keys[i];
+                    if (!current[key]) {
+                        current[key] = {}; // Create nested object if it doesn't exist
+                    }
+                    current = current[key];
+                }
+
+                current[keys[keys.length - 1]] = value;
+            }
+
+            function traverseJSON(obj, parentKey = '') {
+                for (let key in obj) {
+                    const fullKey = parentKey ? `${parentKey}.${key}` : key;
+                    if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+                        traverseJSON(obj[key], fullKey);
+                    } else {
+                        createEditableField(fullKey, key, obj[key]);
+                    }
+                }
+            }
+
+            traverseJSON(data);
+
+            // Initialize tooltip events after rendering
+            document.querySelectorAll('.json-editor .key').forEach(keyElement => {
+                keyElement.addEventListener('mouseenter', function() {
+                    const tooltip = this.querySelector('.tooltip');
+                    tooltip.style.visibility = 'visible';
+                    tooltip.style.opacity = '1';
+                });
+
+                keyElement.addEventListener('mouseleave', function() {
+                    const tooltip = this.querySelector('.tooltip');
+                    tooltip.style.visibility = 'hidden';
+                    tooltip.style.opacity = '0';
+                });
+            });
+        }
+    </script>
+</body>
+</html>
