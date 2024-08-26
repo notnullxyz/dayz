@@ -1,10 +1,15 @@
+# DayZ Server Config Toolkit
 Random tools to facilitate a lubcricated modification of some of the DayZ server files.
 
 ## Disclaimer ##
 Bugs may affect the output, as could the DayZ server version, or random events of chance. If you're going to use it, then make backups of your originals and don't trust random scripts on the internet.
 
+# Scripts
+- cfg-game-play-edit.htm -> cfggameplay.json editor, with search, tooltips, and pukey theme
+- loot-spawn-types-edit.htm -> types.xml loot spawn editor, with search.
+
 ## Usage ##
-- Download the script.
+- Download the relevant script.
 - Open it in your browser, or put it somewhere publically accessible.
 - Upload your original, backed up, configuration/XML file.
 - Change stuff.
